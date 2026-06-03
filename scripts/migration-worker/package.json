@@ -1,0 +1,8 @@
+{
+  "name": "sgf-migration-runner",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "postgres": "^3.4.4"
+  }
+}
