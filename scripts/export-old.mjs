@@ -1,6 +1,7 @@
 /**
- * Script de exportação do projeto antigo (enoacjmlcznsrvynnamf)
- * para JSON em ./export/
+ * Script de exportação do projeto antigo para JSON em ./export/
+ *
+ * Uso: SOURCE_SUPABASE_URL=... SOURCE_SERVICE_ROLE_KEY=... node scripts/export-old.mjs
  */
 import { createClient } from '@supabase/supabase-js';
 import { writeFileSync, mkdirSync } from 'fs';
@@ -11,8 +12,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, '..', 'export');
 mkdirSync(OUT, { recursive: true });
 
-const OLD_URL = 'https://enoacjmlcznsrvynnamf.supabase.co';
-const OLD_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVub2Fjam1sY3puc3J2eW5uYW1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODE2OTM2MCwiZXhwIjoyMDkzNzQ1MzYwfQ.apbQgXeVhkpxPH5d8BUpCshBlMReC-lQD1QS6Ow4tLU';
+const OLD_URL = process.env.SOURCE_SUPABASE_URL || '';
+const OLD_KEY = process.env.SOURCE_SERVICE_ROLE_KEY || '';
+
+if (!OLD_URL || !OLD_KEY) {
+  console.error('Defina SOURCE_SUPABASE_URL e SOURCE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
 
 const sb = createClient(OLD_URL, OLD_KEY);
 
@@ -30,25 +36,11 @@ const TABELAS = [
   'convites_responsavel','classe_biblica_respostas',
 ];
 
-console.log('📤 Exportando dados do projeto antigo...\n');
-let total = 0;
-
+console.log('📤 Exportando...');
 for (const tabela of TABELAS) {
   const { data, error } = await sb.from(tabela).select('*').limit(10000);
-
-  if (error) {
-    if (!error.message.includes('does not exist') && !error.message.includes('relation')) {
-      console.warn(`⚠️  ${tabela}: ${error.message}`);
-    } else {
-      console.log(`⏭️  ${tabela}: não existe no projeto antigo`);
-    }
-    writeFileSync(join(OUT, `${tabela}.json`), '[]');
-    continue;
-  }
-
+  if (error) { writeFileSync(join(OUT, `${tabela}.json`), '[]'); continue; }
   writeFileSync(join(OUT, `${tabela}.json`), JSON.stringify(data, null, 2));
-  console.log(`✅ ${tabela}: ${data.length} registros`);
-  total += data.length;
+  console.log(`✅ ${tabela}: ${data.length}`);
 }
-
-console.log(`\n✅ Export concluído! ${total} registros em ./export/`);
+console.log('✅ Concluído');

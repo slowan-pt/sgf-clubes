@@ -1,0 +1,25 @@
+name: Importar Dados para Novo Supabase
+
+on:
+  workflow_dispatch:
+
+jobs:
+  import:
+    name: Importar dados exportados
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências
+        run: npm ci --legacy-peer-deps
+
+      - name: Importar dados
+        run: node scripts/import-data.mjs --dir ./export
+        env:
+          DEST_SUPABASE_URL: ${{ secrets.DEST_SUPABASE_URL }}
+          DEST_SERVICE_ROLE_KEY: ${{ secrets.DEST_SERVICE_ROLE_KEY }}

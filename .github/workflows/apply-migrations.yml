@@ -1,0 +1,36 @@
+name: Aplicar Migrations no Supabase
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+
+jobs:
+  migrations:
+    name: Aplicar migrations SQL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Aplicar migration 001 - Schema inicial
+        run: |
+          psql "${{ secrets.DATABASE_URL }}" -f supabase/migrations/001_schema_inicial.sql
+        env:
+          PGSSLMODE: require
+
+      - name: Aplicar migration 002 - RLS
+        run: |
+          psql "${{ secrets.DATABASE_URL }}" -f supabase/migrations/002_rls.sql
+        env:
+          PGSSLMODE: require
+
+      - name: Verificar tabelas criadas
+        run: |
+          psql "${{ secrets.DATABASE_URL }}" -c "\dt public.*" 2>&1
+        env:
+          PGSSLMODE: require
