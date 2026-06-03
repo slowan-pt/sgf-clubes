@@ -17,20 +17,29 @@ jobs:
       - name: Instalar PostgreSQL client
         run: sudo apt-get install -y postgresql-client
 
-      - name: Aplicar migration 001 - Schema inicial
+      - name: Testar conexão via pooler
         run: |
-          psql "${{ secrets.DATABASE_URL }}" -f supabase/migrations/001_schema_inicial.sql
+          # Tenta pooler us-east-1 (Session mode)
+          DB_POOLER="postgresql://postgres.bjsbbmxkixodgjlaudkf:${{ secrets.DB_PASSWORD }}@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
+          if PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql "postgresql://postgres.bjsbbmxkixodgjlaudkf@aws-0-us-east-1.pooler.supabase.com:5432/postgres" -c "SELECT 1" 2>/dev/null; then
+            echo "POOL_URL=$DB_POOLER" >> $GITHUB_ENV
+            echo "Conectado via pooler us-east-1"
+          else
+            echo "Pooler indisponível, usando connection string direta"
+            echo "POOL_URL=${{ secrets.DATABASE_URL }}" >> $GITHUB_ENV
+          fi
+
+      - name: Aplicar migration 001 - Schema inicial
+        run: psql "$POOL_URL" -f supabase/migrations/001_schema_inicial.sql -v ON_ERROR_STOP=0
         env:
           PGSSLMODE: require
 
       - name: Aplicar migration 002 - RLS
-        run: |
-          psql "${{ secrets.DATABASE_URL }}" -f supabase/migrations/002_rls.sql
+        run: psql "$POOL_URL" -f supabase/migrations/002_rls.sql -v ON_ERROR_STOP=0
         env:
           PGSSLMODE: require
 
       - name: Verificar tabelas criadas
-        run: |
-          psql "${{ secrets.DATABASE_URL }}" -c "\dt public.*" 2>&1
+        run: psql "$POOL_URL" -c "\dt public.*"
         env:
           PGSSLMODE: require
