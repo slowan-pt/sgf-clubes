@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "SGF Clubes",
+    "slug": "sgf-clubes",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "sgf-clubes",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a56db"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png",
+      "name": "SGF Clubes",
+      "shortName": "SGF",
+      "description": "Plataforma de gestão de Clubes de Desbravadores e Aventureiros",
+      "themeColor": "#1a56db",
+      "backgroundColor": "#ffffff",
+      "startUrl": "/",
+      "display": "standalone",
+      "orientation": "portrait"
+    },
+    "plugins": ["expo-router", "expo-font"]
+  }
+}
