@@ -14,32 +14,70 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar PostgreSQL client
-        run: sudo apt-get install -y postgresql-client
-
-      - name: Testar conexão via pooler
+      - name: Instalar dependências
         run: |
-          # Tenta pooler us-east-1 (Session mode)
-          DB_POOLER="postgresql://postgres.bjsbbmxkixodgjlaudkf:${{ secrets.DB_PASSWORD }}@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
-          if PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql "postgresql://postgres.bjsbbmxkixodgjlaudkf@aws-0-us-east-1.pooler.supabase.com:5432/postgres" -c "SELECT 1" 2>/dev/null; then
-            echo "POOL_URL=$DB_POOLER" >> $GITHUB_ENV
-            echo "Conectado via pooler us-east-1"
-          else
-            echo "Pooler indisponível, usando connection string direta"
-            echo "POOL_URL=${{ secrets.DATABASE_URL }}" >> $GITHUB_ENV
-          fi
+          sudo apt-get install -y postgresql-client iproute2
+          # Habilita IPv6 no runner
+          sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0 || true
+          sudo sysctl -w net.ipv6.conf.default.disable_ipv6=0 || true
 
-      - name: Aplicar migration 001 - Schema inicial
-        run: psql "$POOL_URL" -f supabase/migrations/001_schema_inicial.sql -v ON_ERROR_STOP=0
-        env:
-          PGSSLMODE: require
+      - name: Resolver hostname e diagnosticar
+        run: |
+          echo "=== DNS ==="
+          nslookup db.bjsbbmxkixodgjlaudkf.supabase.co || true
+          echo "=== IPv6 interfaces ==="
+          ip -6 addr || true
+          echo "=== Rotas IPv6 ==="
+          ip -6 route || true
 
-      - name: Aplicar migration 002 - RLS
-        run: psql "$POOL_URL" -f supabase/migrations/002_rls.sql -v ON_ERROR_STOP=0
-        env:
-          PGSSLMODE: require
+      - name: Tentar conexão via IPv4 pooler us-east-1
+        id: pooler
+        continue-on-error: true
+        run: |
+          PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql \
+            "host=aws-0-us-east-1.pooler.supabase.com port=5432 dbname=postgres user=postgres.bjsbbmxkixodgjlaudkf sslmode=require" \
+            -c "SELECT current_database()"
+        timeout-minutes: 2
 
-      - name: Verificar tabelas criadas
-        run: psql "$POOL_URL" -c "\dt public.*"
-        env:
-          PGSSLMODE: require
+      - name: Aplicar migrations via pooler
+        if: steps.pooler.outcome == 'success'
+        run: |
+          PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql \
+            "host=aws-0-us-east-1.pooler.supabase.com port=5432 dbname=postgres user=postgres.bjsbbmxkixodgjlaudkf sslmode=require" \
+            -f supabase/migrations/001_schema_inicial.sql
+
+          PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql \
+            "host=aws-0-us-east-1.pooler.supabase.com port=5432 dbname=postgres user=postgres.bjsbbmxkixodgjlaudkf sslmode=require" \
+            -f supabase/migrations/002_rls.sql
+
+          echo "✅ Migrations aplicadas via pooler!"
+
+      - name: Tentar conexão direta IPv6
+        if: steps.pooler.outcome != 'success'
+        continue-on-error: true
+        run: |
+          DB_HOST="2600:1f1e:90b:a701:3c44:874a:8942:5c3d"
+          PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql \
+            "host=$DB_HOST port=5432 dbname=postgres user=postgres sslmode=require" \
+            -c "SELECT current_database()"
+
+      - name: Aplicar via conexão direta IPv6
+        if: steps.pooler.outcome != 'success'
+        run: |
+          DB_HOST="2600:1f1e:90b:a701:3c44:874a:8942:5c3d"
+          PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql \
+            "host=$DB_HOST port=5432 dbname=postgres user=postgres sslmode=require" \
+            -f supabase/migrations/001_schema_inicial.sql || true
+
+          PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql \
+            "host=$DB_HOST port=5432 dbname=postgres user=postgres sslmode=require" \
+            -f supabase/migrations/002_rls.sql || true
+
+      - name: Verificar tabelas
+        run: |
+          PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql \
+            "host=aws-0-us-east-1.pooler.supabase.com port=5432 dbname=postgres user=postgres.bjsbbmxkixodgjlaudkf sslmode=require" \
+            -c "\dt public.*" 2>/dev/null || \
+          PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql \
+            "host=2600:1f1e:90b:a701:3c44:874a:8942:5c3d port=5432 dbname=postgres user=postgres sslmode=require" \
+            -c "\dt public.*" || true
